@@ -280,12 +280,6 @@ char* GetHtml(string & strResource)
 
 bool GetPoiData(string & strResource)
 {
-	if (!WSAStart())
-	{
-		cout << "WSA Start Failed!" << endl;
-		return false;
-	}
-
 	cout << "Try to connect with " << strResource << "\r\n";
 	char* html = GetHtml(strResource);
 
@@ -328,7 +322,6 @@ bool GetPoiData(string & strResource)
 	cout << "Wrote the data.\r\n";
 
 	free(html);
-	WSACleanup();
 	return true;
 }
 
