@@ -7,17 +7,7 @@
 #include <list>
 #include <memory>
 
-#include <openssl/rand.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-
-#include <zlib.h>
-
-//#pragma comment(lib, "urlmon.lib")
-#pragma comment(lib, "libssl.lib")
-#pragma comment(lib, "libcrypto.lib")
-#pragma comment(lib, "zlibwapi.lib")
-#pragma comment(lib, "ws2_32.lib")
+#include "Crawler.h"
 
 #define Len 100
 #define PORT 443
@@ -51,244 +41,22 @@ string g_strResource = "";
 std::stringstream strStream;
 string strHtml = "";
 string g_place[Len] = { "" };
-SOCKET g_send_socket;
 std::ofstream real_file("POI_real.txt", std::ios::app);
 int g_iBegin = 0;
 int g_iHtml = 0;
 
-SSL_CTX *sslContext;
-SSL *sslHandle;
-
-char* Byte2Char(Byte* data, uLong ndata) {
-	char* res = static_cast<char*>(malloc(ndata));
-
-	for (uLong i = 0; i < ndata; i++) {
-		res[i] = data[i];
-	}
-
-	return res;
-}
-
-char* Utf8ToGbk(const char *src_str)
-{
-	int len = MultiByteToWideChar(CP_UTF8, 0, src_str, -1, NULL, 0);
-	wchar_t* wszGBK = new wchar_t[len + 1];
-	memset(wszGBK, 0, len * 2 + 2);
-	MultiByteToWideChar(CP_UTF8, 0, src_str, -1, wszGBK, len);
-	len = WideCharToMultiByte(CP_ACP, 0, wszGBK, -1, NULL, 0, NULL, NULL);
-	char* szGBK = new char[len + 1];
-	memset(szGBK, 0, len + 1);
-	WideCharToMultiByte(CP_ACP, 0, wszGBK, -1, szGBK, len, NULL, NULL);
-	if (wszGBK) delete[] wszGBK;
-	return szGBK;
-}
-
-bool GzipDecompress(Byte *zdata, uLong nzdata, Byte *data, uLong *ndata) {
-	int err = 0;
-	z_stream d_stream = { 0 }; /* decompression stream */
-	static char dummy_head[2] =
-	{
-		0x8 + 0x7 * 0x10,
-		(((0x8 + 0x7 * 0x10) * 0x100 + 30) / 31 * 31) & 0xFF,
-	};
-
-	d_stream.zalloc = (alloc_func)0;
-	d_stream.zfree = (free_func)0;
-	d_stream.opaque = (voidpf)0;
-	d_stream.next_in = zdata;
-	d_stream.avail_in = 0;
-	d_stream.next_out = data;
-
-	if (inflateInit2(&d_stream, 47) != Z_OK) return false;
-
-	while (d_stream.total_out < *ndata && d_stream.total_in < nzdata)
-	{
-		d_stream.avail_in = d_stream.avail_out = 1; /* force small buffers */
-		if ((err = inflate(&d_stream, Z_NO_FLUSH)) == Z_STREAM_END) break;
-		if (err != Z_OK)
-		{
-			if (err == Z_DATA_ERROR)
-			{
-				d_stream.next_in = (Bytef*)dummy_head;
-				d_stream.avail_in = sizeof(dummy_head);
-				if ((err = inflate(&d_stream, Z_NO_FLUSH)) != Z_OK)
-				{
-					return false;
-				}
-			}
-			else return false;
-		}
-	}
-	
-	if (inflateEnd(&d_stream) != Z_OK) return false;
-	*ndata = d_stream.total_out;
-
-	return true;
-}
-
-Byte* GetGzipByte(Byte* zdata, uLong nzdata, uLong& ndata) {
-	for (uLong i = 4; i < nzdata; i++) {
-		if (zdata[i - 4] == '\r' &&  zdata[i - 3] == '\n' && 
-			zdata[i - 2] == '\r' && zdata[i - 1] == '\n') {
-			ndata = nzdata - i;
-			return zdata + i;
-		}
-	}
-
-	return NULL;
-}
-
-bool SSL_Connect() {
-	ERR_load_BIO_strings();
-
-	// Init SSl library，Load algorithms，load error info.
-	SSL_library_init();
-	OpenSSL_add_all_algorithms();
-	SSL_load_error_strings();
-
-	// New context saying we are a client, and using SSL 2 or 3
-	sslContext = SSL_CTX_new(SSLv23_client_method());
-	if (sslContext == NULL)
-	{
-		ERR_print_errors_fp(stderr);
-		return false;
-	}
-	// Create an SSL struct for the connection
-	sslHandle = SSL_new(sslContext);
-	if (sslHandle == NULL)
-	{
-		ERR_print_errors_fp(stderr);
-		return false;
-	}
-	// Connect the SSL struct to our connection
-	if (!SSL_set_fd(sslHandle, g_send_socket))
-	{
-		ERR_print_errors_fp(stderr);
-		return false;
-	}
-	// Initiate SSL handshake
-	if (SSL_connect(sslHandle) != 1)
-	{
-		ERR_print_errors_fp(stderr);
-		return false;
-	}
-
-	//X509* x509 = SSL_get_peer_certificate(sslHandle);
-	//X509_NAME* xname = X509_get_subject_name(x509);
-	//printf("Connected with %s encryption/n", SSL_get_cipher(sslHandle));
-
-	return true;
-}
-
-bool WSAStart()
-{
-	WSADATA wsaData = { 0 };
-	if (0 != WSAStartup(MAKEWORD(2, 2), &wsaData))
-	{
-		return false;
-	}
-	hostent *server_hostent = gethostbyname(g_strHost.c_str());
-	sockaddr_in send_addr_in = { 0 };
-	g_send_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	send_addr_in.sin_family = AF_INET;
-	send_addr_in.sin_port = htons(PORT);
-	memcpy(&send_addr_in.sin_addr, server_hostent->h_addr, 4);
-	if (0 != connect(g_send_socket, (sockaddr *)&send_addr_in, sizeof(send_addr_in)))
-	{
-		cout << "没有连接成功\r\n";
-		return false;
-	}
-
-	return SSL_Connect();
-}
-
-char* GetHtml(string & strResource)
-{
-	const int times = 10;
-	const int MAXBUFFERSIZE = 1024 * 4;
-	int iCount = 0;
-	char* resBuf = NULL;
-
-	do
-	{
-		if (!WSAStart())
-		{
-			cout << "WSA Start Failed!" << endl;
-			continue;
-		}
-
-		iCount++;
-		if (resBuf != NULL)
-		{
-			free(resBuf);
-			resBuf = NULL;
-		}
-		if (iCount >= times)
-		{
-			cout << "Failed to connect.\r\n";
-			return false;
-		}
-		if(iCount > 1) cout << "The " << iCount << "th connection\r\n";
-
-		string request_string;
-		request_string = "GET " + strResource + " HTTP/1.1\r\n"
-			+ "Host: " + g_strHost + "\r\n"
-			+ "Content-Type: text/html; charset=utf-8\r\n"
-			+ "Connection: close\r\n"
-			+ "\r\n";
-
-		//if (SOCKET_ERROR == send(g_send_socket, request_string.c_str(), request_string.length(), 0))
-		//{
-		//	cout << "Send Failed,Error Code: " << WSAGetLastError() << endl;
-		//	continue;
-		//}
-		SSL_write(sslHandle, request_string.c_str(), request_string.length());
-
-		Byte* recv_buf_c = static_cast<Byte*>(malloc(MAXBUFFERSIZE));
-		ZeroMemory(recv_buf_c, MAXBUFFERSIZE);
-		int recv_size = 0, offset = 0, realloc_count = 0;
-
-		while ((recv_size = SSL_read(sslHandle, recv_buf_c + offset, MAXBUFFERSIZE - 1)) > 0)
-		{
-			offset += recv_size;
-			if ((realloc_count + 1) * MAXBUFFERSIZE - offset< 100)
-			{
-				realloc_count++;
-				recv_buf_c = static_cast<Byte *>(realloc(recv_buf_c, (realloc_count + 1) * MAXBUFFERSIZE));
-			}
-		}
-		recv_buf_c[offset] = '\0';
-		std::shared_ptr<Byte> recvPtr(recv_buf_c, free);
-
-		uLong nzdata = 0;
-		Byte* zdata = GetGzipByte(recv_buf_c, offset, nzdata);
-		uLong ndata = 10 * nzdata;
-		std::shared_ptr<Byte> bufPtr(static_cast<Byte*>(malloc(ndata)), free);
-		
-		if (false == GzipDecompress(zdata, nzdata, bufPtr.get(), &ndata)) {
-			cout << "Error for gzip.\r\n";
-			return NULL;
-		}
-
-		resBuf = Byte2Char(bufPtr.get(), ndata);
-		WSACleanup();
-		//resBuf = Utf8ToGbk(rData);
-	} while (strstr(resBuf, "html") == NULL);
-
-	return resBuf;
-}
+HttpsClient g_client;
 
 bool GetPoiData(string & strResource)
 {
 	cout << "Try to connect with " << strResource << "\r\n";
-	char* html = GetHtml(strResource);
-
-	if (html == NULL) return false;
+	shared_ptr<char> html(g_client.get(g_strHost, strResource), free);
+	if (html.get() == NULL) return false;
 
 	stPOI stPoi;
 	const char *pBuf = NULL;
 
-	pBuf = strstr(html, "<title>");
+	pBuf = strstr(html.get(), "<title>");
 	if (pBuf != NULL)
 	{
 		sscanf_s(pBuf, "%*[^>]>%[^-]", stPoi.h_name, Len);
@@ -321,16 +89,15 @@ bool GetPoiData(string & strResource)
 		<< stPoi.h_eastnorth << endl;
 	cout << "Wrote the data.\r\n";
 
-	free(html);
 	return true;
 }
 
-bool ParseUrl(const string &url_string, string &host_string, string &resource_string)
+bool ParseUrl(const string & url, string & host, string & src)
 {
-	const char * pos_str = strstr(url_string.c_str(), "http://");
+	const char * pos_str = strstr(url.c_str(), "http://");
 	if (pos_str == NULL)
 	{
-		pos_str = url_string.c_str();
+		pos_str = url.c_str();
 	}
 	else
 	{
@@ -342,14 +109,14 @@ bool ParseUrl(const string &url_string, string &host_string, string &resource_st
 
 	sscanf_s(pos_str, "%[^/]%s", host_c, MAXBYTE, resource_c, MAXBYTE);
 
-	host_string = host_c;
+	host = host_c;
 	if (strlen(resource_c) != 0)
 	{
-		resource_string = resource_c;
+		src = resource_c;
 	}
 	else
 	{
-		resource_string = "/";
+		src = "/";
 	}
 
 	return true;
@@ -357,36 +124,27 @@ bool ParseUrl(const string &url_string, string &host_string, string &resource_st
 
 bool ParseHtml()
 {
-	if (!WSAStart())
-	{
-		cout << "WSA Start Failed!" << endl;
-		return false;
-	}
-
 	cout << "Try to connect with " << g_strResource << endl;
-	std::shared_ptr<char> html(GetHtml(g_strResource), free);
 
-	if (html.get() == NULL)
-	{
-		return false;
-	}
+	shared_ptr<char> html(g_client.get(g_strHost, g_strResource), free);
+	if (html.get() == NULL) return false;
 
-	const char *szBuf2 = html.get();
-	while (szBuf2)
+	const char *buf = html.get();
+	while (buf)
 	{
-		szBuf2 = strstr(szBuf2, "<tr>");
-		if (szBuf2 == NULL)
+		buf = strstr(buf, "<tr>");
+		if (buf == NULL)
 		{
 			break;
 		}
-		szBuf2 = strstr(szBuf2, "<td>");	// match "<td>"
-		if (szBuf2 == NULL)
+		buf = strstr(buf, "<td>");	// match "<td>"
+		if (buf == NULL)
 		{
 			break;
 		}
 
 		stHtml html;
-		sscanf_s(szBuf2, "%*[^\"]\"%[^\"]", html.h_address, Len);	// get the url between " ".
+		sscanf_s(buf, "%*[^\"]\"%[^\"]", html.h_address, Len);	// get the url between " ".
 		list_Html.push_back(html);
 	}
 
@@ -469,10 +227,6 @@ int main()
 	}
 
 	real_file.close();
-	SSL_shutdown(sslHandle);
-	SSL_free(sslHandle);
-	SSL_CTX_free(sslContext);
-	closesocket(g_send_socket);
 	system("pause");
 	return 0;
 }

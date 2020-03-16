@@ -15,7 +15,6 @@
 
 #include "tools.h"
 
-//#pragma comment(lib, "urlmon.lib")
 #pragma comment(lib, "libssl.lib")
 #pragma comment(lib, "libcrypto.lib")
 #pragma comment(lib, "ws2_32.lib")
@@ -42,7 +41,7 @@ public:
 	HttpsClient();
 	~HttpsClient();
 
-	char* get(const string& host, const string& urlSrc);
+	char * HttpsClient::get(const string& host, const string& urlParam);
 };
 
 
@@ -125,7 +124,6 @@ bool HttpsClient::start(const string& host) {
 	memcpy(&send_addr_in.sin_addr, server_hostent->h_addr, 4);
 	if (0 != connect(_socket, (sockaddr *)&send_addr_in, sizeof(send_addr_in)))
 	{
-		cout << "Connect to host failed\r\n";
 		return false;
 	}
 
@@ -139,32 +137,32 @@ bool HttpsClient::close() {
 	return true;
 }
 
-char* HttpsClient::get(const string& host, const string& urlSrc) {
+char * HttpsClient::get(const string& host, const string& urlParam) {
 	int i = 0;
-	char* resBuf = NULL;
+	char * res = NULL;
 
 	do
 	{
-		if (this->start(host)) {
-			cout << "WSA Start Failed!" << endl;
-			continue;
+		if (res != NULL) {
+			free(res);
+			res = NULL;
 		}
 
-		if (resBuf != NULL) {
-			free(resBuf);
-			resBuf = NULL;
+		if (false == this->start(host)) {
+			cout << "Connect to host failed.\n";
+			continue;
 		}
 
 		if (i >= _repeat) {
 			cout << "Failed to connect.\r\n";
-			return false;
+			return NULL;
 		}
 
 		if (i > 0) cout << "Repeat the " << i << "th time.\n";
 		i++;
 
 		string request_string;
-		request_string = "GET " + urlSrc + " HTTP/1.1\r\n"
+		request_string = "GET " + urlParam + " HTTP/1.1\r\n"
 			+ "Host: " + host + "\r\n"
 			+ "Content-Type: text/html; charset=utf-8\r\n"
 			+ "Connection: close\r\n"
@@ -197,16 +195,16 @@ char* HttpsClient::get(const string& host, const string& urlSrc) {
 		uLong nzdata = 0;
 		Byte* zdata = GetGzipByte(recv_buf_c, offset, nzdata);
 		uLong ndata = 10 * nzdata;
-		std::shared_ptr<Byte> bufPtr(static_cast<Byte*>(malloc(ndata)), free);
+		Byte* buf = static_cast<Byte*>(malloc(ndata));
 
-		if (false == GzipDecompress(zdata, nzdata, bufPtr.get(), &ndata)) {
+		if (false == GzipDecompress(zdata, nzdata, buf, &ndata)) {
 			cout << "Error for gzip.\r\n";
 			return NULL;
 		}
 
-		resBuf = Byte2Char(bufPtr.get(), ndata);
+		res = reinterpret_cast<char*>(buf);
 		this->close();
-	} while (strstr(resBuf, "html") == NULL);
+	} while (strstr(res, "html") == NULL);
 
-	return resBuf;
+	return res;
 }

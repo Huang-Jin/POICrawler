@@ -5,16 +5,6 @@
 
 using namespace std;
 
-char* Byte2Char(Byte* data, uLong ndata) {
-	char* res = static_cast<char*>(malloc(ndata));
-
-	for (uLong i = 0; i < ndata; i++) {
-		res[i] = data[i];
-	}
-
-	return res;
-}
-
 char* Utf8ToGbk(const char *src_str)
 {
 	int len = MultiByteToWideChar(CP_UTF8, 0, src_str, -1, NULL, 0);
