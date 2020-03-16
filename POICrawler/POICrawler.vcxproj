@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Crawler.h" />
+    <ClInclude Include="mysqlHelper.h" />
     <ClInclude Include="tools.h" />
   </ItemGroup>
   <ItemGroup>
@@ -48,8 +49,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>D:\Program Files %28x86%29\OpenSSL-Win32\include;D:\_Programming\_Libs\zlib-1.2.11;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\Program Files %28x86%29\OpenSSL-Win32\lib;D:\_Programming\_Libs\zlib-1.2.11\contrib\vstudio\vc12\x86\ZlibDllRelease;$(LibraryPath)</LibraryPath>
+    <IncludePath>D:\Program Files %28x86%29\OpenSSL-Win32\include;D:\_Programming\_Libs\zlib-1.2.11;C:\Program Files %28x86%29\MySQL\MySQL Connector C 6.1\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Program Files %28x86%29\MySQL\MySQL Connector C 6.1\lib;D:\Program Files %28x86%29\OpenSSL-Win32\lib;D:\_Programming\_Libs\zlib-1.2.11\contrib\vstudio\vc12\x86\ZlibDllRelease;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -66,7 +67,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>libssl.lib;libcrypto.lib;zlibwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libssl.lib;libcrypto.lib;zlibwapi.lib;libmysql.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">

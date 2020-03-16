@@ -1,13 +1,14 @@
 #include <iostream>
 #include <fstream>
-#include <iomanip>
 #include <sstream>
-#include <WinSock2.h>
+//#include <iomanip>
+//#include <WinSock2.h>
 #include <string>
 #include <list>
 #include <memory>
 
 #include "Crawler.h"
+#include "mysqlHelper.h"
 
 #define Len 100
 #define PORT 443
@@ -159,6 +160,13 @@ bool ParseHtml()
 
 int main()
 {
+	MySQLParam param;
+	MySQLHelper sqlHelper(&param);
+	sqlHelper.connect();
+
+	char * sql = "create table test (name varchar(20), province varchar(20), city varchar(10), district varchar(15), address varchar(50), type varchar(30), LatLon varchar(100));";
+	sqlHelper.query(sql);
+
 	g_strHost = "www.poi86.com";
 
 	std::ifstream save_file("Save.txt");
